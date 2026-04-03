@@ -169,12 +169,12 @@ def ai_engine():
 # API — Events
 # ---------------------------------------------------------------------------
 
-@app.route("/api/events", methods=["GET"])
+@app.route("/v1/events", methods=["GET"])
 def api_get_events():
     return jsonify([with_risk(e) for e in events])
 
 
-@app.route("/api/events", methods=["POST"])
+@app.route("/v1/events", methods=["POST"])
 def api_create_event():
     data = request.get_json(force=True) or {}
     process_name = data.get("process_name", "").strip()
@@ -232,7 +232,7 @@ def api_create_event():
     }), 201
 
 
-@app.route("/api/events/<event_id>", methods=["GET"])
+@app.route("/v1/events/<event_id>", methods=["GET"])
 def api_get_event(event_id):
     event = next((e for e in events if e["id"] == event_id), None)
     if not event:
@@ -240,7 +240,7 @@ def api_get_event(event_id):
     return jsonify(with_risk(event))
 
 
-@app.route("/api/events/<event_id>", methods=["DELETE"])
+@app.route("/v1/events/<event_id>", methods=["DELETE"])
 def api_delete_event(event_id):
     idx = next((i for i, e in enumerate(events) if e["id"] == event_id), None)
     if idx is None:
@@ -253,7 +253,7 @@ def api_delete_event(event_id):
 # API — Analytics
 # ---------------------------------------------------------------------------
 
-@app.route("/api/analytics/summary")
+@app.route("/v1/analytics/summary")
 def api_analytics_summary():
     wr = [with_risk(e) for e in events]
     high = sum(1 for e in wr if e["risk_level"] == "High")
@@ -271,7 +271,7 @@ def api_analytics_summary():
     })
 
 
-@app.route("/api/analytics/risk-distribution")
+@app.route("/v1/analytics/risk-distribution")
 def api_risk_distribution():
     wr = [with_risk(e) for e in events]
     return jsonify({
@@ -281,7 +281,7 @@ def api_risk_distribution():
     })
 
 
-@app.route("/api/analytics/events-per-process")
+@app.route("/v1/analytics/events-per-process")
 def api_events_per_process():
     wr = [with_risk(e) for e in events]
     counts = {}
@@ -301,7 +301,7 @@ def api_events_per_process():
     return jsonify(result)
 
 
-@app.route("/api/analytics/recent-activity")
+@app.route("/v1/analytics/recent-activity")
 def api_recent_activity():
     wr = [with_risk(e) for e in events]
     high_risk = [e for e in wr if e["risk_level"] == "High"]
@@ -313,7 +313,7 @@ def api_recent_activity():
 # API — ML
 # ---------------------------------------------------------------------------
 
-@app.route("/api/ml/model-info")
+@app.route("/v1/ml/model-info")
 def api_ml_model_info():
     from datetime import timedelta
     last_trained = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
@@ -367,7 +367,7 @@ def api_ml_model_info():
     })
 
 
-@app.route("/api/ml/anomalies")
+@app.route("/v1/ml/anomalies")
 def api_ml_anomalies():
     wr = [with_risk(e) for e in events]
     if not wr:
@@ -395,7 +395,7 @@ def api_ml_anomalies():
     return jsonify(result)
 
 
-@app.route("/api/ml/trends")
+@app.route("/v1/ml/trends")
 def api_ml_trends():
     wr = [with_risk(e) for e in events]
     ALPHA = 0.3
@@ -432,7 +432,7 @@ def api_ml_trends():
     return jsonify(result)
 
 
-@app.route("/api/ml/process-health")
+@app.route("/v1/ml/process-health")
 def api_ml_process_health():
     wr = [with_risk(e) for e in events]
     now_ms = datetime.now(timezone.utc).timestamp() * 1000
@@ -487,7 +487,7 @@ def api_ml_process_health():
     return jsonify(result)
 
 
-@app.route("/api/ml/predictions")
+@app.route("/v1/ml/predictions")
 def api_ml_predictions():
     wr = [with_risk(e) for e in events]
     by_process = {}
@@ -533,7 +533,7 @@ def api_ml_predictions():
     return jsonify(result)
 
 
-@app.route("/api/ml/model-stats")
+@app.route("/v1/ml/model-stats")
 def api_ml_model_stats():
     wr = [with_risk(e) for e in events]
     n = len(wr)
@@ -572,7 +572,7 @@ def api_ml_model_stats():
     })
 
 
-@app.route("/api/health")
+@app.route("/v1/health")
 def api_health():
     return jsonify({"status": "ok"})
 

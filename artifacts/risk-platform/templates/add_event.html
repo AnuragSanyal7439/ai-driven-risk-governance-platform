@@ -139,15 +139,18 @@ async function submitEvent() {
   if (!valid) return;
 
   const btn = document.getElementById('submit-btn');
-  btn.textContent = 'Analyzing...';
+  btn.innerHTML = '<span class="opacity-75">Analyzing...</span>';
   btn.disabled = true;
 
   try {
-    const res = await fetch('/api/events', {
+    const res = await fetch('/v1/events', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({process_name: processName, event_type: eventType, severity, likelihood}),
     });
+
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) throw new Error('Server returned non-JSON response');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Unknown error');
 
@@ -171,13 +174,23 @@ async function submitEvent() {
     if (data.contributing_factors && data.contributing_factors.length) {
       document.getElementById('r-factors-section').classList.remove('hidden');
       document.getElementById('r-factors').innerHTML = data.contributing_factors.map(f => `<li>${f}</li>`).join('');
+    } else {
+      document.getElementById('r-factors-section').classList.add('hidden');
     }
 
-    showToast('Event logged successfully. Risk score calculated.');
+    if (data.risk_level === 'High') {
+      showHighRiskAlert(processName, data.risk_score);
+    } else {
+      showToast('Event logged successfully. Risk score: ' + data.risk_score);
+    }
+
+    setConnected(true);
   } catch(e) {
+    console.error('Submit error:', e);
+    setConnected(false);
     showToast('Submission failed: ' + e.message, 'error');
   } finally {
-    btn.textContent = 'Submit Event & Analyze';
+    btn.innerHTML = 'Submit Event &amp; Analyze';
     btn.disabled = false;
   }
 }

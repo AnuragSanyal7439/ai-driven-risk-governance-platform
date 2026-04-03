@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="space-y-6 max-w-6xl mx-auto">
-  <div>
-    <h1 class="text-3xl font-bold tracking-tight">Risk Analytics</h1>
-    <p class="text-slate-500 mt-1">Macro-level intelligence on operational risks and vulnerabilities.</p>
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Risk Analytics</h1>
+      <p class="text-slate-500 mt-1">Macro-level intelligence on operational risks and vulnerabilities.</p>
+    </div>
+    <div id="last-updated-analytics" class="text-xs text-slate-400">Loading...</div>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -40,76 +43,107 @@
 
 {% block scripts %}
 <script>
-async function loadAnalytics() {
-  const [distRes, procRes] = await Promise.all([
-    fetch('/api/analytics/risk-distribution'),
-    fetch('/api/analytics/events-per-process'),
-  ]);
-  const dist = await distRes.json();
-  const procs = await procRes.json();
+let _pieChart = null;
+let _barChart = null;
+let _lastUpdatedAt = null;
+let _lastUpdatedTimer = null;
 
-  // Pie chart
-  const pieCtx = document.getElementById('pieChart').getContext('2d');
-  new Chart(pieCtx, {
-    type: 'doughnut',
-    data: {
-      labels: ['High Risk', 'Medium Risk', 'Low Risk'],
-      datasets: [{
-        data: [dist.high, dist.medium, dist.low],
-        backgroundColor: ['#ef4444', '#f59e0b', '#10b981'],
-        borderWidth: 3,
-        borderColor: '#fff',
-        hoverOffset: 8,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      cutout: '65%',
-      plugins: {
-        legend: { position: 'bottom', labels: { padding: 20, font: { size: 13 } } },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${ctx.label}: ${ctx.raw} Events`
+function startLastUpdatedTimer() {
+  clearInterval(_lastUpdatedTimer);
+  _lastUpdatedAt = Date.now();
+  _lastUpdatedTimer = setInterval(() => {
+    const el = document.getElementById('last-updated-analytics');
+    if (!el || !_lastUpdatedAt) return;
+    const secs = Math.floor((Date.now() - _lastUpdatedAt) / 1000);
+    el.textContent = secs < 5 ? 'Just updated' : `Last updated: ${secs}s ago`;
+  }, 1000);
+}
+
+async function loadAnalytics() {
+  try {
+    const [dist, procs] = await Promise.all([
+      safeFetch('/v1/analytics/risk-distribution'),
+      safeFetch('/v1/analytics/events-per-process'),
+    ]);
+
+    setConnected(true);
+    startLastUpdatedTimer();
+
+    // ── Pie chart ──────────────────────────────────────────
+    if (_pieChart) {
+      _pieChart.data.datasets[0].data = [dist.high, dist.medium, dist.low];
+      _pieChart.update('active');
+    } else {
+      const pieCtx = document.getElementById('pieChart').getContext('2d');
+      _pieChart = new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+          datasets: [{
+            data: [dist.high, dist.medium, dist.low],
+            backgroundColor: ['#ef4444', '#f59e0b', '#10b981'],
+            borderWidth: 3,
+            borderColor: '#fff',
+            hoverOffset: 8,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          cutout: '65%',
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 20, font: { size: 13 } } },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} Events` } }
           }
         }
-      }
+      });
     }
-  });
 
-  // Bar chart
-  const barCtx = document.getElementById('barChart').getContext('2d');
-  new Chart(barCtx, {
-    type: 'bar',
-    data: {
-      labels: procs.map(p => p.process_name),
-      datasets: [
-        { label: 'Low Risk', data: procs.map(p => p.low_risk), backgroundColor: '#10b981', stack: 'a' },
-        { label: 'Medium Risk', data: procs.map(p => p.medium_risk), backgroundColor: '#f59e0b', stack: 'a' },
-        { label: 'High Risk', data: procs.map(p => p.high_risk), backgroundColor: '#ef4444', stack: 'a', borderRadius: { topLeft: 4, topRight: 4 } },
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'top', labels: { font: { size: 12 }, padding: 16 } } },
-      scales: {
-        x: {
-          stacked: true,
-          ticks: { maxRotation: 40, font: { size: 11 } },
-          grid: { display: false }
+    // ── Bar chart ──────────────────────────────────────────
+    const labels = procs.map(p => p.process_name);
+    const lowData = procs.map(p => p.low_risk);
+    const medData = procs.map(p => p.medium_risk);
+    const highData = procs.map(p => p.high_risk);
+
+    if (_barChart) {
+      _barChart.data.labels = labels;
+      _barChart.data.datasets[0].data = lowData;
+      _barChart.data.datasets[1].data = medData;
+      _barChart.data.datasets[2].data = highData;
+      _barChart.update('active');
+    } else {
+      const barCtx = document.getElementById('barChart').getContext('2d');
+      _barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Low Risk', data: lowData, backgroundColor: '#10b981', stack: 'a' },
+            { label: 'Medium Risk', data: medData, backgroundColor: '#f59e0b', stack: 'a' },
+            { label: 'High Risk', data: highData, backgroundColor: '#ef4444', stack: 'a', borderRadius: { topLeft: 4, topRight: 4 } },
+          ]
         },
-        y: {
-          stacked: true,
-          beginAtZero: true,
-          ticks: { stepSize: 1, font: { size: 11 } },
-          grid: { color: '#f1f5f9' }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { font: { size: 12 }, padding: 16 } } },
+          scales: {
+            x: { stacked: true, ticks: { maxRotation: 40, font: { size: 11 } }, grid: { display: false } },
+            y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f1f5f9' } }
+          }
         }
-      }
+      });
     }
-  });
+
+  } catch(err) {
+    console.error('Analytics poll error:', err);
+    setConnected(false);
+    const lu = document.getElementById('last-updated-analytics');
+    if (lu) lu.textContent = 'Connection lost';
+  }
 }
 
 loadAnalytics();
+setInterval(loadAnalytics, 5000);
 </script>
 {% endblock %}

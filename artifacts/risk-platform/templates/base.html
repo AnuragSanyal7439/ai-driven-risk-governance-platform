@@ -22,9 +22,10 @@
     .nav-icon { width:18px;height:18px;flex-shrink:0; }
     .card { background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06); }
     .stat-card { border-left:4px solid #e2e8f0; }
-    .toast { position:fixed;bottom:24px;right:24px;z-index:9999;padding:14px 20px;border-radius:10px;font-size:14px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.15);transition:opacity .3s; }
+    .toast { position:fixed;bottom:24px;right:24px;z-index:9999;padding:14px 20px;border-radius:10px;font-size:14px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.15);transition:opacity .3s,transform .3s;transform:translateY(0); }
     .toast-success { background:#dcfce7;color:#15803d;border:1px solid #86efac; }
     .toast-error { background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5; }
+    .toast-alert { background:#1e293b;color:#fef3c7;border:1px solid #f59e0b;font-size:15px;padding:16px 22px; }
     .slider-wrap { position:relative;padding:4px 0; }
     input[type=range] { -webkit-appearance:none;width:100%;height:6px;border-radius:3px;background:#e2e8f0;outline:none; }
     input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#1d4ed8;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 2px #bfdbfe; }
@@ -35,7 +36,11 @@
     .tab-btn { padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;border:none;cursor:pointer;background:transparent;color:#64748b;transition:all .15s; }
     .tab-btn.active { background:#fff;color:#1e293b;box-shadow:0 1px 3px rgba(0,0,0,.1); }
     @keyframes fadeInUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes slideInRow { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes highRiskGlow { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} 50%{box-shadow:0 0 0 6px rgba(239,68,68,.25)} }
     .fade-in { animation:fadeInUp .3s ease; }
+    .new-row { animation:slideInRow .35s ease; }
+    .high-risk-flash { animation:highRiskGlow .6s ease 2; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
@@ -73,7 +78,13 @@
       Intelligence Engine
     </a>
   </nav>
-  <div class="px-4 py-3 border-t border-slate-100 text-xs text-slate-400">v2.1.0 &mdash; Flask Edition</div>
+  <div class="px-4 py-3 border-t border-slate-100 space-y-2">
+    <div class="flex items-center gap-2 text-xs">
+      <div id="conn-dot" class="h-2 w-2 rounded-full bg-emerald-500 transition-colors duration-500"></div>
+      <span id="conn-label" class="font-medium text-slate-500">Live</span>
+    </div>
+    <div class="text-xs text-slate-400">v2.1.0 &mdash; Flask Edition</div>
+  </div>
 </div>
 
 <!-- Main content -->
@@ -83,26 +94,81 @@
   </main>
 </div>
 
-<!-- Toast container -->
-<div id="toast-container"></div>
+<!-- Toast container — stack from bottom -->
+<div id="toast-container" class="fixed bottom-6 right-6 z-[9999] flex flex-col-reverse gap-2 items-end"></div>
 
 <script>
+// ─── Connection status ────────────────────────────────────────
+function setConnected(ok) {
+  const dot = document.getElementById('conn-dot');
+  const lbl = document.getElementById('conn-label');
+  if (!dot) return;
+  if (ok) {
+    dot.className = 'h-2 w-2 rounded-full bg-emerald-500 transition-colors duration-500';
+    lbl.textContent = 'Live';
+    lbl.className = 'font-medium text-slate-500';
+  } else {
+    dot.className = 'h-2 w-2 rounded-full bg-red-500 transition-colors duration-500';
+    lbl.textContent = 'Disconnected';
+    lbl.className = 'font-medium text-red-500';
+  }
+}
+
+// ─── Toast ────────────────────────────────────────────────────
 function showToast(msg, type='success') {
   const t = document.createElement('div');
   t.className = 'toast toast-' + type;
-  t.textContent = msg;
-  document.getElementById('toast-container').appendChild(t);
-  setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(), 300); }, 3000);
+  t.innerHTML = msg;
+  const container = document.getElementById('toast-container');
+  container.appendChild(t);
+  const duration = type === 'alert' ? 5000 : 3500;
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateY(8px)'; setTimeout(()=>t.remove(), 300); }, duration);
 }
 
+function showHighRiskAlert(processName, score) {
+  showToast(`⚠️ High Risk Event Detected!<br><span style="opacity:.85;font-size:12px">${processName} — Score: ${score}</span>`, 'alert');
+}
+
+// ─── Counter animation ────────────────────────────────────────
+function animateCounter(el, from, to, isFloat) {
+  if (!el) return;
+  const fromN = parseFloat(from) || 0;
+  const toN = parseFloat(to) || 0;
+  if (fromN === toN) { el.textContent = isFloat ? toN.toFixed(1) : toN; return; }
+  const duration = 600;
+  const start = performance.now();
+  function step(now) {
+    const p = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const current = fromN + (toN - fromN) * eased;
+    el.textContent = isFloat ? current.toFixed(1) : Math.round(current);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ─── Safe fetch (JSON-only, with error handling) ─────────────
+async function safeFetch(url) {
+  const res = await fetch(url);
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    throw new Error(`Non-JSON response from ${url}: ${res.status}`);
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ─── Shared helpers ───────────────────────────────────────────
 function riskBadge(level) {
   const cls = level === 'High' ? 'badge-high' : level === 'Medium' ? 'badge-medium' : 'badge-low';
   return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}">${level}</span>`;
 }
 
 function timeAgo(iso) {
-  const d = new Date(iso);
-  return d.toLocaleString();
+  return new Date(iso).toLocaleString();
 }
 
 function shortTime(iso) {

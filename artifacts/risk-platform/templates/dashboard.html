@@ -6,9 +6,12 @@
       <h1 class="text-3xl font-bold tracking-tight">Command Center</h1>
       <p class="text-slate-500 mt-1">Real-time process intelligence and risk governance overview.</p>
     </div>
-    <div class="flex items-center gap-2 text-sm bg-white border px-3 py-1.5 rounded-full shadow-sm">
-      <div class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
-      <span class="font-medium text-slate-500">System: Online</span>
+    <div class="flex flex-col items-end gap-1.5">
+      <div class="flex items-center gap-2 text-sm bg-white border px-3 py-1.5 rounded-full shadow-sm">
+        <div class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+        <span class="font-medium text-slate-500">System: Online</span>
+      </div>
+      <div id="last-updated" class="text-xs text-slate-400">Initializing...</div>
     </div>
   </div>
 
@@ -46,7 +49,7 @@
     </div>
 
     <!-- High Risk Feed -->
-    <div class="card border-t-4 border-t-red-500 bg-red-50/30">
+    <div class="card border-t-4 border-t-red-500 bg-red-50/30" id="high-risk-card">
       <div class="px-5 py-5 border-b border-slate-100">
         <h2 class="font-bold text-lg text-red-600 flex items-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01"/></svg>
@@ -64,54 +67,105 @@
 
 {% block scripts %}
 <script>
+let _prevTotal = null;
+let _prevHigh = null;
+let _prevMed = null;
+let _prevAvg = null;
+let _prevHighIds = new Set();
+let _lastUpdatedAt = null;
+let _lastUpdatedTimer = null;
+
+function startLastUpdatedTimer() {
+  clearInterval(_lastUpdatedTimer);
+  _lastUpdatedAt = Date.now();
+  _lastUpdatedTimer = setInterval(() => {
+    const el = document.getElementById('last-updated');
+    if (!el || !_lastUpdatedAt) return;
+    const secs = Math.floor((Date.now() - _lastUpdatedAt) / 1000);
+    el.textContent = secs < 5 ? 'Just updated' : `Last updated: ${secs}s ago`;
+  }, 1000);
+}
+
 async function loadDashboard() {
-  const [summaryRes, activityRes] = await Promise.all([
-    fetch('/api/analytics/summary'),
-    fetch('/api/analytics/recent-activity'),
-  ]);
-  const summary = await summaryRes.json();
-  const activity = await activityRes.json();
+  try {
+    const [summary, activity] = await Promise.all([
+      safeFetch('/v1/analytics/summary'),
+      safeFetch('/v1/analytics/recent-activity'),
+    ]);
 
-  document.getElementById('stat-total').textContent = summary.total_events;
-  document.getElementById('stat-high').textContent = summary.high_risk_count;
-  document.getElementById('stat-medium').textContent = summary.medium_risk_count;
-  document.getElementById('stat-avg').textContent = summary.avg_risk_score.toFixed(1);
+    setConnected(true);
+    startLastUpdatedTimer();
 
-  // Recent events
-  const tbody = document.getElementById('recent-events-body');
-  if (!summary.recent_events.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-8 text-center text-slate-400">No events recorded yet.</td></tr>';
-  } else {
-    tbody.innerHTML = summary.recent_events.map(e => `
-      <tr class="hover:bg-slate-50 transition-colors">
-        <td class="px-5 py-3 font-medium">${e.process_name}</td>
-        <td class="px-5 py-3 text-slate-500">${e.event_type}</td>
-        <td class="px-5 py-3">${riskBadge(e.risk_level)}</td>
-        <td class="px-5 py-3 font-mono font-bold">${e.risk_score}</td>
-        <td class="px-5 py-3 text-right text-slate-400 text-xs">${shortTime(e.timestamp)}</td>
-      </tr>
-    `).join('');
-  }
+    // Animated counters
+    animateCounter(document.getElementById('stat-total'), _prevTotal ?? summary.total_events, summary.total_events, false);
+    animateCounter(document.getElementById('stat-high'), _prevHigh ?? summary.high_risk_count, summary.high_risk_count, false);
+    animateCounter(document.getElementById('stat-medium'), _prevMed ?? summary.medium_risk_count, summary.medium_risk_count, false);
+    animateCounter(document.getElementById('stat-avg'), _prevAvg ?? summary.avg_risk_score, summary.avg_risk_score, true);
 
-  // High risk feed
-  const feed = document.getElementById('high-risk-feed');
-  if (!activity.length) {
-    feed.innerHTML = '<div class="text-center py-6 text-slate-400 bg-white rounded-lg border border-dashed text-sm">No active high-risk alerts.</div>';
-  } else {
-    feed.innerHTML = activity.map(e => `
-      <div class="bg-white p-4 rounded-lg border shadow-sm relative overflow-hidden">
-        <div class="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-l-lg"></div>
-        <div class="flex justify-between items-start mb-1 pl-1">
-          <h4 class="font-semibold text-sm">${e.process_name}</h4>
-          <span class="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded font-mono">Score: ${e.risk_score}</span>
+    _prevTotal = summary.total_events;
+    _prevHigh = summary.high_risk_count;
+    _prevMed = summary.medium_risk_count;
+    _prevAvg = summary.avg_risk_score;
+
+    // Recent events — detect new ones for animation
+    const tbody = document.getElementById('recent-events-body');
+    if (!summary.recent_events.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-8 text-center text-slate-400">No events recorded yet.</td></tr>';
+    } else {
+      tbody.innerHTML = summary.recent_events.map(e => `
+        <tr class="hover:bg-slate-50 transition-colors new-row">
+          <td class="px-5 py-3 font-medium">${e.process_name}</td>
+          <td class="px-5 py-3 text-slate-500">${e.event_type}</td>
+          <td class="px-5 py-3">${riskBadge(e.risk_level)}</td>
+          <td class="px-5 py-3 font-mono font-bold">${e.risk_score}</td>
+          <td class="px-5 py-3 text-right text-slate-400 text-xs">${shortTime(e.timestamp)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // High-risk feed — detect new alerts
+    const newHighIds = new Set(activity.map(e => e.id));
+    const hasNewAlert = activity.some(e => !_prevHighIds.has(e.id));
+
+    if (hasNewAlert && _prevHighIds.size > 0) {
+      // Flash the card
+      const card = document.getElementById('high-risk-card');
+      card.classList.remove('high-risk-flash');
+      void card.offsetWidth;
+      card.classList.add('high-risk-flash');
+      // Show toast for the first new alert
+      const newest = activity.find(e => !_prevHighIds.has(e.id));
+      if (newest) showHighRiskAlert(newest.process_name, newest.risk_score);
+    }
+    _prevHighIds = newHighIds;
+
+    const feed = document.getElementById('high-risk-feed');
+    if (!activity.length) {
+      feed.innerHTML = '<div class="text-center py-6 text-slate-400 bg-white rounded-lg border border-dashed text-sm">No active high-risk alerts.</div>';
+    } else {
+      feed.innerHTML = activity.map(e => `
+        <div class="bg-white p-4 rounded-lg border shadow-sm relative overflow-hidden new-row">
+          <div class="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-l-lg"></div>
+          <div class="flex justify-between items-start mb-1 pl-1">
+            <h4 class="font-semibold text-sm">${e.process_name}</h4>
+            <span class="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded font-mono">Score: ${e.risk_score}</span>
+          </div>
+          <p class="text-xs text-slate-500 mb-3 pl-1">${e.event_type}</p>
+          <p class="text-xs font-medium bg-slate-50 p-2 rounded border-l-2 border-blue-600 pl-1">${e.recommendation}</p>
         </div>
-        <p class="text-xs text-slate-500 mb-3 pl-1">${e.event_type}</p>
-        <p class="text-xs font-medium bg-slate-50 p-2 rounded border-l-2 border-blue-600 pl-1">${e.recommendation}</p>
-      </div>
-    `).join('');
+      `).join('');
+    }
+
+  } catch(err) {
+    console.error('Dashboard poll error:', err);
+    setConnected(false);
+    const lu = document.getElementById('last-updated');
+    if (lu) lu.textContent = 'Connection lost';
   }
 }
 
+// Initial load + 3s polling
 loadDashboard();
+setInterval(loadDashboard, 3000);
 </script>
 {% endblock %}

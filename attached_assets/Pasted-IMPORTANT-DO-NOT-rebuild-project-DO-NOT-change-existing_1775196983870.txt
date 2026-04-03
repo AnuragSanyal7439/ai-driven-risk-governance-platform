@@ -1,0 +1,158 @@
+IMPORTANT:
+- DO NOT rebuild project
+- DO NOT change existing UI layout/design
+- ONLY enhance functionality and fix issues
+
+--------------------------------------------------
+
+🎯 PRIMARY GOAL:
+Fix JSON errors, restore real-time functionality, and enhance system with advanced real-time features.
+
+--------------------------------------------------
+
+1. FIX JSON + API ISSUES:
+
+- Ensure all responses use Flask jsonify()
+- Fix errors like:
+  - Unexpected token '<'
+  - Invalid JSON
+  - 500 errors
+
+- Ensure:
+  GET /api/events → returns valid JSON list
+  POST /submit-event → returns { "status": "success" }
+
+--------------------------------------------------
+
+2. REMOVE DATABASE:
+
+- Remove PostgreSQL/SQLite completely
+- Use:
+  events = []
+
+- Store all events in memory
+
+--------------------------------------------------
+
+3. RESTORE BASE REAL-TIME (POLLING):
+
+- Fetch /api/events every 3 seconds using setInterval
+- No page reload anywhere
+
+--------------------------------------------------
+
+4. ADD SMART REAL-TIME FEATURES:
+
+✅ (A) INSTANT UI UPDATE (NO WAIT)
+- After form submit → update UI instantly (before next poll)
+- Optimistically add event to UI
+
+--------------------------------------------------
+
+✅ (B) LIVE HIGH-RISK ALERT SYSTEM:
+
+- When a HIGH risk event is detected:
+  - Show popup alert / toast:
+    "⚠️ High Risk Event Detected!"
+  - Highlight High-Risk Feed section (glow or color flash)
+
+--------------------------------------------------
+
+✅ (C) AUTO-SCROLL / LIVE FEED:
+
+- New events should appear at top of table
+- Smooth animation when new row is added
+
+--------------------------------------------------
+
+✅ (D) REAL-TIME COUNTER ANIMATION:
+
+- Animate numbers (Total Events, High Risk etc.)
+- Smooth increment effect instead of instant jump
+
+--------------------------------------------------
+
+✅ (E) LAST UPDATED TIMER:
+
+- Show:
+  "Last updated: X seconds ago"
+- Update every second
+
+--------------------------------------------------
+
+✅ (F) CONNECTION STATUS INDICATOR:
+
+- Show:
+  🟢 Live / 🔴 Disconnected
+
+- If fetch fails → show "Disconnected"
+
+--------------------------------------------------
+
+5. DASHBOARD (DYNAMIC):
+
+Update:
+- Total Events
+- High Risk
+- Medium Risk
+- Avg Risk Score
+
+Risk logic:
+score = severity × likelihood
+
+--------------------------------------------------
+
+6. HIGH-RISK FEED:
+
+- Filter events where score > 12
+- Auto-update every few seconds
+- Highlight new entries
+
+--------------------------------------------------
+
+7. RECORD EVENT PAGE:
+
+- Submit using Fetch API (NO reload)
+- On submit:
+  - Show success toast
+  - Immediately reflect in dashboard
+
+--------------------------------------------------
+
+8. ANALYTICS (LIVE CHARTS):
+
+- Update Chart.js charts dynamically
+- Re-render charts when new data arrives
+
+--------------------------------------------------
+
+9. INTELLIGENCE ENGINE (ENHANCED):
+
+- Replace "Loading..." with computed values:
+  - Events analyzed = total events
+  - Simple anomaly detection:
+    if score > avg_score → anomaly
+
+- Update in real-time
+
+--------------------------------------------------
+
+10. ERROR HANDLING (VERY IMPORTANT):
+
+- Handle fetch errors gracefully
+- Log errors in console
+- Do not break UI
+
+--------------------------------------------------
+
+🎯 FINAL OUTPUT:
+
+- Fully working real-time dashboard
+- Smooth UI updates
+- Live alerts + animations
+- No JSON errors
+- No database
+- Production-like demo system
+
+ONLY MODIFY EXISTING FILES.
+DO NOT REBUILD.

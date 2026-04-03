@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="space-y-6 max-w-5xl mx-auto">
-  <div>
-    <h1 class="text-3xl font-bold tracking-tight">Risk Log &amp; Analysis</h1>
-    <p class="text-slate-500 mt-1">Complete historical record of all assessed process events.</p>
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Risk Log &amp; Analysis</h1>
+      <p class="text-slate-500 mt-1">Complete historical record of all assessed process events.</p>
+    </div>
+    <div id="last-updated-log" class="text-xs text-slate-400">Loading...</div>
   </div>
 
   <!-- Filters -->
@@ -31,11 +34,19 @@
 <script>
 let allEvents = [];
 let currentFilter = 'All';
+let _prevEventIds = new Set();
+let _lastUpdatedAt = null;
+let _lastUpdatedTimer = null;
 
-async function loadEvents() {
-  const res = await fetch('/api/events');
-  allEvents = await res.json();
-  renderEvents();
+function startLastUpdatedTimer() {
+  clearInterval(_lastUpdatedTimer);
+  _lastUpdatedAt = Date.now();
+  _lastUpdatedTimer = setInterval(() => {
+    const el = document.getElementById('last-updated-log');
+    if (!el || !_lastUpdatedAt) return;
+    const secs = Math.floor((Date.now() - _lastUpdatedAt) / 1000);
+    el.textContent = secs < 5 ? 'Just updated' : `Last updated: ${secs}s ago`;
+  }, 1000);
 }
 
 function setFilter(btn, filter) {
@@ -70,7 +81,7 @@ function renderEvents() {
 
   const borderColor = { High:'#ef4444', Medium:'#f59e0b', Low:'#10b981' };
   container.innerHTML = filtered.map(e => `
-    <div class="card overflow-hidden border-l-4" style="border-left-color:${borderColor[e.risk_level] || '#94a3b8'}">
+    <div class="card overflow-hidden border-l-4 new-row" style="border-left-color:${borderColor[e.risk_level] || '#94a3b8'}">
       <div class="p-5 flex flex-col md:flex-row md:items-stretch gap-5">
         <div class="flex-1 min-w-0">
           <div class="flex flex-wrap items-center gap-2 mb-2">
@@ -107,21 +118,48 @@ function renderEvents() {
   `).join('');
 }
 
+async function loadEvents() {
+  try {
+    const events = await safeFetch('/v1/events');
+    setConnected(true);
+    startLastUpdatedTimer();
+
+    // Detect new high-risk events
+    const newIds = new Set(events.map(e => e.id));
+    if (_prevEventIds.size > 0) {
+      const newHighRisk = events.filter(e => !_prevEventIds.has(e.id) && e.risk_level === 'High');
+      if (newHighRisk.length > 0) showHighRiskAlert(newHighRisk[0].process_name, newHighRisk[0].risk_score);
+    }
+    _prevEventIds = newIds;
+
+    allEvents = events;
+    renderEvents();
+  } catch(err) {
+    console.error('Risk log poll error:', err);
+    setConnected(false);
+    const lu = document.getElementById('last-updated-log');
+    if (lu) lu.textContent = 'Connection lost';
+  }
+}
+
 async function deleteEvent(id, btn) {
   if (!confirm('Delete this event?')) return;
   btn.disabled = true;
   try {
-    const res = await fetch('/api/events/' + id, {method:'DELETE'});
+    const res = await fetch('/v1/events/' + id, {method:'DELETE'});
     if (!res.ok) throw new Error('Delete failed');
     allEvents = allEvents.filter(e => e.id !== id);
+    _prevEventIds.delete(id);
     renderEvents();
     showToast('Event removed successfully.');
   } catch(e) {
+    console.error('Delete error:', e);
     showToast('Failed to delete event.', 'error');
     btn.disabled = false;
   }
 }
 
 loadEvents();
+setInterval(loadEvents, 3000);
 </script>
 {% endblock %}
