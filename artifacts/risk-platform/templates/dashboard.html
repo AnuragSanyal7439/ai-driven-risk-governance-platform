@@ -23,6 +23,20 @@
     <div class="card stat-card p-5"><div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">Avg Risk Score <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div><div class="text-3xl font-black" id="stat-avg">—</div></div>
   </div>
 
+  <!-- Live Event Ticker -->
+  <div class="relative flex items-stretch rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-slate-900 h-11 select-none">
+    <div class="flex-shrink-0 flex items-center gap-2 px-4 bg-blue-600 z-10">
+      <span class="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+      <span class="text-xs font-bold text-white tracking-widest uppercase">Live</span>
+    </div>
+    <div class="flex-1 overflow-hidden relative">
+      <div id="ticker-track" class="ticker-track absolute inset-y-0 flex items-center whitespace-nowrap gap-8 px-6">
+        <span class="text-slate-400 text-xs">Loading live feed…</span>
+      </div>
+    </div>
+    <div class="flex-shrink-0 w-16 bg-gradient-to-l from-slate-900 to-transparent absolute right-0 top-0 bottom-0 pointer-events-none"></div>
+  </div>
+
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- Recent Events Table -->
     <div class="card lg:col-span-2 border-t-4 border-t-blue-600">
@@ -164,8 +178,36 @@ async function loadDashboard() {
   }
 }
 
-// Initial load + 3s polling
+// ── Live Event Ticker ─────────────────────────────────────────
+function buildTickerItem(e) {
+  const cls = e.risk_level === 'High' ? 'ticker-high' : e.risk_level === 'Medium' ? 'ticker-medium' : 'ticker-low';
+  const badge = e.risk_level === 'High' ? '⬤' : e.risk_level === 'Medium' ? '◆' : '●';
+  return `<span class="${cls} text-xs font-semibold">${badge} ${e.process_name}</span>`
+    + `<span class="text-slate-400 text-xs font-normal">${e.event_type}</span>`
+    + `<span class="text-xs font-bold bg-white/10 rounded px-1.5 py-0.5 ${cls}">Score ${e.risk_score}</span>`
+    + `<span class="ticker-dot text-lg font-bold">·</span>`;
+}
+
+async function loadTicker() {
+  try {
+    const items = await safeFetch('/v1/analytics/ticker');
+    if (!items.length) return;
+    const single = items.map(buildTickerItem).join('');
+    const track = document.getElementById('ticker-track');
+    if (!track) return;
+    // Duplicate for seamless loop: CSS translateX(-50%) loops perfectly
+    track.innerHTML = `<span class="flex items-center gap-5">${single}${single}</span>`;
+    // Reset animation so new data starts fresh without jump
+    track.style.animation = 'none';
+    void track.offsetWidth;
+    track.style.animation = '';
+  } catch(e) { /* silent — ticker failure shouldn't break the dashboard */ }
+}
+
+// Initial load + 3s polling for dashboard, 10s for ticker
 loadDashboard();
+loadTicker();
 setInterval(loadDashboard, 3000);
+setInterval(loadTicker, 10000);
 </script>
 {% endblock %}

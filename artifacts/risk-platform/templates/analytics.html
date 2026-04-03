@@ -63,7 +63,7 @@ async function loadAnalytics() {
   try {
     const [dist, procs] = await Promise.all([
       safeFetch('/v1/analytics/risk-distribution'),
-      safeFetch('/v1/analytics/events-per-process'),
+      safeFetch('/v1/analytics/process-breakdown'),
     ]);
 
     setConnected(true);

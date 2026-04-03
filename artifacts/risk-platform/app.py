@@ -281,7 +281,7 @@ def api_risk_distribution():
     })
 
 
-@app.route("/v1/analytics/events-per-process")
+@app.route("/v1/analytics/process-breakdown")
 def api_events_per_process():
     wr = [with_risk(e) for e in events]
     counts = {}
@@ -299,6 +299,20 @@ def api_events_per_process():
     result = [{"process_name": k, **v} for k, v in counts.items()]
     result.sort(key=lambda x: x["count"], reverse=True)
     return jsonify(result)
+
+
+@app.route("/v1/analytics/ticker")
+def api_ticker():
+    wr = [with_risk(e) for e in events]
+    wr.sort(key=lambda e: e["timestamp"], reverse=True)
+    items = [{
+        "process_name": e["process_name"],
+        "event_type": e["event_type"],
+        "risk_level": e["risk_level"],
+        "risk_score": e["risk_score"],
+        "timestamp": e["timestamp"],
+    } for e in wr[:12]]
+    return jsonify(items)
 
 
 @app.route("/v1/analytics/recent-activity")
