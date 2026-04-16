@@ -1,0 +1,114 @@
+IMPORTANT:
+- DO NOT rebuild project
+- ADD this feature into existing system
+
+--------------------------------------------------
+
+🎯 FEATURE: Login + Code Risk Analyzer
+
+--------------------------------------------------
+
+1. LOGIN PAGE:
+
+- Create simple login page (/login)
+- Fields:
+  - Username
+  - Password
+
+- No database needed
+- Use hardcoded credentials:
+  username: admin
+  password: admin123
+
+- On success → redirect to dashboard
+- Use session (Flask session)
+
+--------------------------------------------------
+
+2. ADD NEW PAGE: "Code Risk Analyzer"
+
+- Add new menu item in sidebar:
+  "Code Analyzer"
+
+- Page should have:
+  - Textarea (paste code)
+  - Upload file option (.py, .js, .txt)
+  - Submit button
+
+--------------------------------------------------
+
+3. BACKEND: CODE ANALYSIS LOGIC
+
+Create API:
+POST /analyze-code
+
+Logic (simple rule-based):
+
+Check code for:
+- "error"
+- "undefined"
+- "null"
+- "exception"
+- "fail"
+
+Count occurrences → assign score
+
+Example:
+- 0–2 issues → Low
+- 3–5 → Medium
+- 6+ → High
+
+Risk Score = number of issues × 2
+
+Return:
+{
+  risk_score,
+  risk_level,
+  issues_found: [],
+  recommendation
+}
+
+--------------------------------------------------
+
+4. FRONTEND DISPLAY:
+
+After submit:
+- Show:
+  - Risk Score
+  - Risk Level
+  - List of detected issues
+  - Recommendation
+
+--------------------------------------------------
+
+5. REAL-TIME FEEL:
+
+- Show loading animation while analyzing
+- Display result instantly (no reload)
+
+--------------------------------------------------
+
+6. INTEGRATE WITH EXISTING SYSTEM:
+
+- Add analyzed result as an "event" in events list
+- So it appears in:
+  - Dashboard
+  - Risk Log
+  - Analytics
+
+--------------------------------------------------
+
+7. UI REQUIREMENTS:
+
+- Match existing design
+- Use cards for result display
+- Highlight HIGH risk in red
+
+--------------------------------------------------
+
+🎯 FINAL RESULT:
+
+- Login system added
+- Code analyzer added
+- Risk automatically calculated
+- Fully integrated with dashboard

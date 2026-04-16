@@ -1,10 +1,28 @@
 import os
+import re
 import math
 import uuid
 from datetime import datetime, timezone
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 
 app = Flask(__name__)
+app.secret_key = "risk-platform-secret-key-2024"
+
+HARDCODED_USERNAME = "admin"
+HARDCODED_PASSWORD = "admin123"
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
 
 # ---------------------------------------------------------------------------
 # In-memory store (resets on restart by design)
@@ -135,34 +153,68 @@ seed_sample_data()
 # HTML page routes
 # ---------------------------------------------------------------------------
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("logged_in"):
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        if username == HARDCODED_USERNAME and password == HARDCODED_PASSWORD:
+            session["logged_in"] = True
+            session["username"] = username
+            return redirect(url_for("dashboard"))
+        error = "Invalid username or password."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def index():
     return redirect(url_for("dashboard"))
 
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
     return render_template("dashboard.html", active="dashboard")
 
 
 @app.route("/add-event")
+@login_required
 def add_event():
     return render_template("add_event.html", active="add_event")
 
 
 @app.route("/risk-analysis")
+@login_required
 def risk_analysis():
     return render_template("risk_analysis.html", active="risk_analysis")
 
 
 @app.route("/analytics")
+@login_required
 def analytics():
     return render_template("analytics.html", active="analytics")
 
 
 @app.route("/ai-engine")
+@login_required
 def ai_engine():
     return render_template("ai_engine.html", active="ai_engine")
+
+
+@app.route("/code-analyzer")
+@login_required
+def code_analyzer():
+    return render_template("code_analyzer.html", active="code_analyzer")
 
 
 # ---------------------------------------------------------------------------
@@ -589,6 +641,79 @@ def api_ml_model_stats():
 @app.route("/v1/health")
 def api_health():
     return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# API — Code Risk Analyzer
+# ---------------------------------------------------------------------------
+
+RISK_KEYWORDS = ["error", "undefined", "null", "exception", "fail"]
+
+@app.route("/analyze-code", methods=["POST"])
+@login_required
+def analyze_code():
+    code_text = ""
+
+    # Accept either JSON body or multipart file upload
+    if request.content_type and "multipart/form-data" in request.content_type:
+        code_input = request.form.get("code", "")
+        uploaded = request.files.get("file")
+        if uploaded and uploaded.filename:
+            code_text = uploaded.read().decode("utf-8", errors="replace")
+        else:
+            code_text = code_input
+    else:
+        data = request.get_json(force=True) or {}
+        code_text = data.get("code", "")
+
+    if not code_text.strip():
+        return jsonify({"error": "No code provided"}), 400
+
+    lower_code = code_text.lower()
+    issues_found = []
+    for kw in RISK_KEYWORDS:
+        count = len(re.findall(r'\b' + re.escape(kw) + r'\b', lower_code))
+        if count:
+            issues_found.append({"keyword": kw, "count": count, "total": count})
+
+    total_issues = sum(i["count"] for i in issues_found)
+    risk_score = total_issues * 2
+
+    if total_issues <= 2:
+        risk_level = "Low"
+        recommendation = "Code appears stable. No immediate action needed."
+        severity, likelihood = 1, 2
+    elif total_issues <= 5:
+        risk_level = "Medium"
+        recommendation = "Moderate risk patterns detected. Review flagged keywords."
+        severity, likelihood = 3, 2
+    else:
+        risk_level = "High"
+        recommendation = "High number of risk indicators. Code review required immediately."
+        severity, likelihood = 4, 4
+
+    # Save as event so it appears in Dashboard, Risk Log, and Analytics
+    event_id = f"code-{uuid.uuid4().hex[:8]}"
+    now = datetime.now(timezone.utc).isoformat()
+    events.append({
+        "id": event_id,
+        "process_name": "Code Analyzer",
+        "event_type": f"Code Risk Analysis ({total_issues} issue{'s' if total_issues != 1 else ''} found)",
+        "severity": severity,
+        "likelihood": likelihood,
+        "timestamp": now,
+        "source": "code_analyzer",
+    })
+
+    return jsonify({
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "issues_found": issues_found,
+        "total_issues": total_issues,
+        "recommendation": recommendation,
+        "event_id": event_id,
+        "lines_analyzed": len(code_text.splitlines()),
+    })
 
 
 if __name__ == "__main__":
