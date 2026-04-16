@@ -3,7 +3,7 @@ import re
 import math
 import uuid
 from datetime import datetime, timezone
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_from_directory
 
 app = Flask(__name__)
 app.secret_key = "risk-platform-secret-key-2024"
@@ -641,6 +641,11 @@ def api_ml_model_stats():
 @app.route("/v1/health")
 def api_health():
     return jsonify({"status": "ok"})
+
+
+@app.route("/download/sample")
+def download_sample():
+    return send_from_directory("static", "sample_code.py", as_attachment=True)
 
 
 # ---------------------------------------------------------------------------
