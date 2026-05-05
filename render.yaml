@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ai-driven-risk-platform
+    runtime: python3
+    rootDir: artifacts/risk-platform
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PORT
+        value: 10000
